@@ -44,10 +44,24 @@ empty_versioned_bucket() {
     local bucket_name=$1
 
     echo "Removing all versions and delete markers from bucket '$bucket_name'..."
-    aws s3api list-object-versions --bucket "$bucket_name" --query '{Objects: Versions[].{Key: Key, VersionId: VersionId}, DeleteMarkers[].{Key: Key, VersionId: VersionId}}' --output json > delete-markers.json
+
+    aws s3api list-object-versions --bucket "${bucket_name}" --output=json --query='{Objects: Versions[].{Key:Key,VersionId:VersionId}}' > delete-markers.json
+
+    if [[ $? -ne 0 ]]; then
+        echo "Failed to fetch object versions or delete markers."
+        return 1
+    fi
 
     aws s3api delete-objects --bucket "$bucket_name" --delete file://delete-markers.json
-    rm -f delete-markers.json
+
+    if [[ $? -ne 0 ]]; then
+        echo "Failed to delete objects and delete markers from the bucket."
+        rm -f delete-markers.json
+        return 1
+    else
+        echo "All versions and delete markers removed successfully."
+        rm -f delete-markers.json
+    fi
 }
 
 
@@ -78,17 +92,27 @@ main() {
 
             if is_versioning_enabled "$bucket_name"; then
                 echo "Bucket '$bucket_name' has versioning enabled."
-                empty_versioned_bucket "$bucket_name"
+                 if ! empty_versioned_bucket "$bucket_name"; then
+                    echo "Failed to empty the versioned bucket. Exiting."
+                    exit 1
+                fi
             else
                 echo "Bucket '$bucket_name' does not have versioning enabled."
-                empty_non_versioned_bucket "$bucket_name"
+                if ! empty_non_versioned_bucket "$bucket_name"; then
+                    echo "Failed to empty the bucket. Exiting."
+                    exit 1
+                fi
             fi
         else
             echo "Bucket '$bucket_name' has no objects."
         fi
 
-        delete_bucket "$bucket_name"
-        echo "Bucket '$bucket_name' deleted successfully."
+        if ! delete_bucket "$bucket_name"; then
+            echo "Failed to delete bucket. Exiting."
+            exit 1
+        else
+            echo "Bucket '$bucket_name' deleted successfully."
+        fi
     else
         echo "Bucket '$bucket_name' does not exist."
     fi
