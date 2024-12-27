@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a custom policy, role, group, and user setup using a policy document stored in S3.
+Resources:
+  CustomPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: AppDevReadOnlyPolicy
+      Description: Read-only policy for S3, EC2, ECS, IAM, and CloudWatch.
+      PolicyDocument:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: s3://devsecops-bucket-dev-es453s/iam-policies/readonly-iam.json
+
+  IAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AppDevReadOnlyRole
+      Path: "/"
+      AssumeRolePolicyDocument: 
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+          Action: sts:AssumeRole
+
+  IAMGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: AppDevReadOnlyGroup
+      ManagedPolicyArns:
+        - !Ref CustomPolicy
+
+  IAMUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: AppDevReadOnlyUser
+      Groups:
+        - !Ref IAMGroup
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt IAMRole.Arn
+    Description: ARN of the IAM Role
+
+  UserName:
+    Value: !Ref IAMUser
+    Description: Created User Name
+
+  GroupName:
+    Value: !Ref IAMGroup
+    Description: Created Group Name
+
+  PolicyArn:
+    Value: !Ref CustomPolicy
+    Description: ARN of the Managed Policy
